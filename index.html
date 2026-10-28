@@ -15,36 +15,47 @@ lessons.push(
 {id:'a1-5',level:'A1',title:'Simple questions',vi:'Câu hỏi cơ bản',en:'Basic questions',vocab:[['Kas?','Ai? / Cái gì?','Who? / What?'],['Kur?','Ở đâu?','Where?'],['Kaip?','Như thế nào?','How?'],['Kada?','Khi nào?','When?']],grammar:{vi:'Từ để hỏi thường đứng đầu câu. Kur? hỏi về nơi chốn, Kada? hỏi về thời gian, Kaip? hỏi về cách thức.',en:'Question words commonly appear at the start of a question. Kur asks about place, Kada about time, and Kaip about manner.'},qs:[{type:'choice',prompt:'“Ở đâu?” nói thế nào?',en:'How do you say “Where?”',options:['Kur?','Kas?','Kada?','Kaip?'],answer:'Kur?'},{type:'write',prompt:'Viết “Khi nào?”',en:'Write “When?”',answer:'Kada?'},{type:'listen',prompt:'Nghe và chép lại',en:'Listen and type',answer:'Kaip'}]}
 );
 const storeKey='labas-lietuva-v1';let state;try{state=JSON.parse(localStorage.getItem(storeKey))||{xp:0,hearts:5,streak:0,lastDay:'',done:[],missed:[],level:'A1'}}catch{state={xp:0,hearts:5,streak:0,lastDay:'',done:[],missed:[],level:'A1'}}let page='home',active=null,idx=0,selected='',feedback=null,lang='vi';const view=document.getElementById('view');function save(){localStorage.setItem(storeKey,JSON.stringify(state));scheduleSync()}function tr(vi,en){return lang==='vi'?vi:en}
-function speak(s) {
-  if (!('speechSynthesis' in window)) {
-    alert('Thiết bị không hỗ trợ đọc văn bản.');
+
+const LABAS_AUDIO = {
+  'Labas': 'audio/labas.mp3',
+  'Ačiū': 'audio/aciu.mp3',
+  'Laba diena': 'audio/laba-diena.mp3',
+  'Viso gero': 'audio/viso-gero.mp3'
+};
+
+let labasCurrentAudio = null;
+
+function speak(text) {
+  const phrase = String(text ?? '').normalize('NFC').trim();
+  if (!phrase) return;
+
+  const src = LABAS_AUDIO[phrase];
+
+  if (labasCurrentAudio) {
+    labasCurrentAudio.pause();
+    labasCurrentAudio.currentTime = 0;
+    labasCurrentAudio = null;
+  }
+
+  if (!src) {
+    alert('Chưa có âm thanh cho từ: ' + phrase);
     return;
   }
 
-  const voices = speechSynthesis.getVoices();
-  const ltVoice = voices.find(v =>
-    v.lang.toLowerCase().replace('_', '-') === 'lt-lt'
-  ) || voices.find(v =>
-    v.lang.toLowerCase().startsWith('lt-')
-  );
+  const player = new Audio(src);
+  labasCurrentAudio = player;
 
-  if (!ltVoice) {
-    alert(
-      'Thiết bị chưa có giọng đọc tiếng Lithuania. ' +
-      'Ứng dụng sẽ không sử dụng giọng ngôn ngữ khác để tránh phát âm sai.'
-    );
-    return;
-  }
+  player.addEventListener('error', () => {
+    if (labasCurrentAudio === player) labasCurrentAudio = null;
+    alert('Không tải được file âm thanh: ' + src);
+  }, { once: true });
 
-  speechSynthesis.cancel();
-
-  const u = new SpeechSynthesisUtterance(s);
-  u.lang = 'lt-LT';
-  u.voice = ltVoice;
-  u.rate = 0.85;
-
-  speechSynthesis.speak(u);
+  player.play().catch(() => {
+    if (labasCurrentAudio === player) labasCurrentAudio = null;
+    alert('Không thể phát âm thanh. Hãy thử lại.');
+  });
 }
+
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}function headerStats(){['xp','streak','hearts'].forEach(k=>document.getElementById(k).textContent=state[k])}function render(){headerStats();document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('active',b.id==='nav-'+page));if(page==='home')home();else if(page==='lesson')lesson();else if(page==='review')review();else profile()}
 function home(){view.innerHTML=`<div class="heading">${tr('Hành trình học của bạn','Your learning journey')} ✨</div><div class="card"><div class="muted">${tr('Chọn cấp độ','Choose a level')}</div><div class="levels">${['A1','A2','B1','B2'].map(l=>`<button class="level ${state.level===l?'active':''}" onclick="state.level='${l}';save();render()">${l}</button>`).join('')}</div><p class="tiny">${tr('Nội dung mẫu cho mỗi cấp độ; chương trình đầy đủ đang được phát triển.','Sample content for each level; the full curriculum is in development.')}</p></div><div class="heading">${tr('Bài học','Lessons')} · ${state.level}</div>${lessons.filter(l=>l.level===state.level).map(l=>`<button class="lesson" onclick="start('${l.id}')"><span><strong>${state.done.includes(l.id)?'✅':'📗'} ${esc(l.title)}</strong><small>${esc(lang==='vi'?l.vi:l.en)} · 10–15 min</small></span><span>❯</span></button>`).join('')}<div class="card" style="margin-top:16px"><span class="badge">🇱🇹 Real-life Lithuanian</span><p>${tr('Học từ mới, nghe phát âm và luyện câu đơn giản. Bài hội thoại tương tác sẽ được bổ sung trong các bản tiếp theo.','Learn vocabulary, hear pronunciation, and practice simple sentences. Interactive conversations are planned for later versions.')}</p></div>`}
 function start(id){active=lessons.find(l=>l.id===id);idx=-1;selected='';feedback=null;page='lesson';render()}function lesson(){if(idx===-1){view.innerHTML=`<button class="action secondary" onclick="page='home';render()">← ${tr('Trở lại','Back')}</button><div class="card"><span class="badge">${active.level} · ${esc(active.title)}</span><h2>${tr('Từ vựng mới','New vocabulary')}</h2>${active.vocab.map(v=>`<div class="lesson"><div><strong>${esc(v[0])}</strong><small>${esc(lang==='vi'?v[1]:v[2])}</small></div><button class="level" onclick="speak('${v[0].replace(/'/g,"\\'")}')">🔊</button></div>`).join('')}<h3>📘 ${tr('Ngữ pháp','Grammar')}</h3><p>${esc(active.grammar[lang])}</p><button class="action" onclick="idx=0;render()">${tr('Bắt đầu luyện tập','Start practice')} →</button></div>`;return}if(idx>=active.qs.length){finish();return}let q=active.qs[idx];view.innerHTML=`<button class="action secondary" onclick="page='home';render()">✕ ${tr('Thoát bài','Exit')}</button><p class="muted">${tr('Câu','Question')} ${idx+1}/${active.qs.length}</p><div class="bar"><div style="width:${idx/active.qs.length*100}%"></div></div><div class="card" style="margin-top:18px"><div class="badge">${({choice:'Multiple choice',tiles:'Sentence building',write:'Writing',listen:'Listening'})[q.type]}</div><div class="question">${esc(lang==='vi'?q.prompt:q.en)}</div>${q.type==='listen'?`<button class="action secondary" onclick="speak('${q.answer}')">🔊 ${tr('Nghe lại','Play audio')}</button>`:''}${q.type==='choice'?q.options.map(o=>`<button class="choice ${selected===o?'selected':''}" onclick="selected=${JSON.stringify(o).replace(/"/g,'&quot;')};render()">${esc(o)}</button>`).join(''):q.type==='tiles'?`<div id="tile-answer" class="card" style="min-height:58px">${esc(selected)}</div>${q.options.map(o=>`<button class="word" onclick="selected=(selected+' ${o}').trim();render()">${esc(o)}</button>`).join('')}<button class="action secondary" onclick="selected='';render()">↺ ${tr('Làm lại','Clear')}</button>`:`<input class="input" id="answer" placeholder="${tr('Nhập câu trả lời...','Type your answer...')}" value="${esc(selected)}" oninput="selected=this.value">`}${feedback?`<div class="feedback ${feedback.ok?'':'wrong'}">${feedback.ok?'✅ '+tr('Chính xác!','Correct!'):'💡 '+tr('Đáp án đúng: ','Correct answer: ')+esc(q.answer)}</div>`:''}<button class="action" onclick="${feedback?'next()':'check()'}">${feedback?tr('Tiếp tục →','Continue →'):tr('Kiểm tra','Check')}</button></div>`}
